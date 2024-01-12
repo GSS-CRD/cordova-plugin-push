@@ -33,6 +33,9 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.security.SecureRandom
 import java.util.*
+import com.hiennv.flutter_callkit_incoming.CallkitNotificationManager
+import com.hiennv.flutter_callkit_incoming.Data
+import kotlin.collections.HashMap
 
 /**
  * Firebase Cloud Messaging Service Class
@@ -150,6 +153,49 @@ class FCMService : FirebaseMessagingService() {
         Log.d(TAG, "Do Not Force & Is In Foreground")
         extras.putBoolean(PushConstants.COLDSTART, false)
         sendExtras(extras)
+      // 支援 VoIP Notification (相依 flutter-plugin-incoming) 
+      } else if (extras.getString("type")?.equals("VoIP") == true) {
+        val notificationManager = CallkitNotificationManager(context)
+
+        val callerId = extras.getString("callerId").orEmpty()
+        val name = extras.getString("name").orEmpty()
+        val isVideo = extras.getString("isVideo").orEmpty().toBoolean()
+        val timeout = extras.getString("timeout").orEmpty().toLong()
+
+        val bundle = Data(hashMapOf(
+          "id" to callerId,
+          "type" to if (isVideo) 1 else 0,
+          "appName" to "iota",
+          "duration" to timeout,
+          "textAccept" to (extras.getString("textAccept") ?: "Accept"),
+          "textDecline" to (extras.getString("textDecline") ?: "Decline"),
+          "nameCaller" to name,
+          "extra" to hashMapOf(
+            "callerId" to callerId,
+            "isVideo" to isVideo,
+            "jid" to extras.getString("jid").orEmpty(),
+            "name" to name,
+            "timeout" to timeout,
+            "action" to (extras.getString("action") ?: "invite"),
+          ),
+          "android" to hashMapOf(
+            "backgroundColor" to "#11ABFE",
+          ),
+          "missedCallNotification" to hashMapOf(
+            "subtitle" to (extras.getString("missedCallSubtitle") ?: "Missed Call"),
+            "isShowCallback" to false,
+          )
+        )).toBundle()
+
+        when (extras.getString("action")) {
+          "invite" -> {
+            notificationManager.showIncomingNotification(bundle)
+          }
+          "deny" -> {
+            notificationManager.clearIncomingNotification(bundle, false)
+            notificationManager.showMissCallNotification(bundle)
+          }
+        }
       } else if (forceShow && isInForeground) {
         Log.d(TAG, "Force & Is In Foreground")
         extras.putBoolean(PushConstants.COLDSTART, false)
